@@ -1,0 +1,25 @@
+/* Recording pulse animation */
+@keyframes recPulse {
+  0%, 100% { background-color: #e96464; }
+  50% { background-color: #b03030; }
+}
+.rec-pulse { animation: recPulse 1.2s ease-in-out infinite; }
+
+/* Custom scrollbar matching design */
+.custom-scroll::-webkit-scrollbar {
+  width: 12px;
+}
+.custom-scroll::-webkit-scrollbar-track {
+  background: #eaeaea;
+  border-radius: 100px;
+  margin: 14px 0;
+}
+.custom-scroll::-webkit-scrollbar-thumb {
+  background: #808080;
+  border-radius: 100px;
+  min-height: 80px;
+}
+.custom-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: #808080 #eaeaea;
+}

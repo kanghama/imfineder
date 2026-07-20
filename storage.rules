@@ -1,0 +1,16 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    // allow authenticated users to upload to their own folder
+    match /uploads/{userId}/{allPaths=**} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // public assets (icons) - restrict to deploy
+    match /icons/{allPaths=**} {
+      allow read: if true;
+      allow write: if false;
+    }
+  }
+}

@@ -1,0 +1,17 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // rooms collection
+    match /rooms/{roomId}/messages/{messageId} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null && request.resource.data.keys().hasAll(['username','emoji','ts']) && request.resource.size() < 256 * 1024;
+      allow update, delete: if false;
+    }
+    // allow listing rooms to authenticated users
+    match /rooms/{roomId} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null && request.resource.data.keys().hasAll(['name','createdAt','createdBy']);
+      allow update, delete: if false;
+    }
+  }
+}
