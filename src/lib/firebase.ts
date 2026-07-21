@@ -8,6 +8,7 @@ import { getAuth, signInAnonymously as fbSignInAnonymously, onAuthStateChanged a
 import {
   getFirestore,
   collection,
+  collectionGroup,
   doc,
   addDoc,
   setDoc,
@@ -98,15 +99,60 @@ export async function uploadFile(file: File, destPath: string, onProgress?: (per
   });
 }
 
-export async function sendMessage(roomId: string, payload: { username: string; emoji: string; text?: string; media?: string[] }) {
+export async function createRoom(room: { id: string; name: string; password?: string; createdAt: number; createdBy: string }) {
+  initFirebase();
+  if (!db) throw new Error("Firestore not initialized");
+  await setDoc(doc(db, "rooms", room.id), room as any);
+}
+
+export async function updateRoom(room: { id: string; name: string; password?: string; createdAt: number; createdBy: string }) {
+  initFirebase();
+  if (!db) throw new Error("Firestore not initialized");
+  await updateDoc(doc(db, "rooms", room.id), { name: room.name, password: room.password, createdBy: room.createdBy });
+}
+
+export async function deleteRoom(roomId: string) {
+  initFirebase();
+  if (!db) throw new Error("Firestore not initialized");
+  await deleteDoc(doc(db, "rooms", roomId));
+}
+
+export function subscribeRooms(cb: (rooms: any[]) => void) {
+  initFirebase();
+  if (!db) throw new Error("Firestore not initialized");
+  const col = collection(db, "rooms");
+  const q = query(col, orderBy("createdAt", "asc" as const));
+  return onSnapshot(q, (snap) => {
+    const out: any[] = [];
+    snap.forEach((d) => out.push({ id: d.id, ...(d.data() as any) }));
+    cb(out);
+  });
+}
+
+export function subscribeAllMessages(cb: (msgs: any[]) => void) {
+  initFirebase();
+  if (!db) throw new Error("Firestore not initialized");
+  const q = query(collectionGroup(db, "messages"), orderBy("ts", "asc" as const));
+  return onSnapshot(q, (snap) => {
+    const out: any[] = [];
+    snap.forEach((d) => {
+      const data = d.data() as any;
+      const roomId = d.ref.parent.parent?.id || "";
+      out.push({ id: d.id, roomId, emoji: data.emoji || "", username: data.username || "", text: data.text || "", images: data.images || [], videos: data.videos || [], audios: data.audios || [], date: data.date || "", time: data.time || "", ts: data.ts?.toMillis?.() || Date.now() });
+    });
+    cb(out);
+  });
+}
+
+export async function sendMessage(roomId: string, payload: { username: string; emoji: string; text?: string; images?: string[]; videos?: string[]; audios?: string[] }) {
   initFirebase();
   if (!db) throw new Error("Firestore not initialized");
   const col = collection(db, "rooms", roomId, "messages");
-  const doc = await addDoc(col, {
+  const docRef = await addDoc(col, {
     ...payload,
     ts: serverTimestamp(),
   });
-  return doc.id;
+  return docRef.id;
 }
 
 export function subscribeMessages(roomId: string, cb: (msgs: any[]) => void) {
@@ -116,7 +162,10 @@ export function subscribeMessages(roomId: string, cb: (msgs: any[]) => void) {
   const q = query(col, orderBy("ts", "asc" as const));
   return onSnapshot(q, (snap) => {
     const out: any[] = [];
-    snap.forEach((d) => out.push({ id: d.id, ...(d.data() as any) }));
+    snap.forEach((d) => {
+      const data = d.data() as any;
+      out.push({ id: d.id, roomId, emoji: data.emoji || "", username: data.username || "", text: data.text || "", images: data.images || [], videos: data.videos || [], audios: data.audios || [], date: data.date || "", time: data.time || "", ts: data.ts?.toMillis?.() || Date.now() });
+    });
     cb(out);
   });
 }
@@ -126,6 +175,11 @@ export default {
   signInAnonymously,
   onAuthStateChanged,
   uploadFile,
+  createRoom,
+  updateRoom,
+  deleteRoom,
+  subscribeRooms,
+  subscribeAllMessages,
   sendMessage,
   subscribeMessages,
 };
