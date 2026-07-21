@@ -8,7 +8,12 @@ import { getAuth, signInAnonymously as fbSignInAnonymously, onAuthStateChanged a
 import {
   getFirestore,
   collection,
+  doc,
   addDoc,
+  setDoc,
+  getDoc,
+  deleteDoc,
+  updateDoc,
   query,
   orderBy,
   onSnapshot,

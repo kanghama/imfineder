@@ -1095,7 +1095,7 @@ function RoomCard({ room, onClick, onContextMenu, isOwner }: {
       )}
       <div className="h-[64px] shrink-0 w-[80px] relative">
         <div className="absolute inset-0 overflow-hidden rounded-[4px]">
-          <img alt="" className="absolute h-[100.25%] left-[-10.24%] max-w-none top-[-0.13%] w-[120.48%]" src={imgFolder} draggable={false} onContextMenu={e => e.preventDefault()} />
+          <img alt="" className="absolute inset-0 w-full h-full object-contain" src={imgFolder} draggable={false} onContextMenu={e => e.preventDefault()} />
         </div>
       </div>
       <p className={`${SF} font-[510] text-[12px] ${dm ? "text-[#e0e0e0]" : "text-black"} text-center max-w-[100px] break-all`}>{room.name}</p>
@@ -1220,8 +1220,10 @@ const ChatInput = forwardRef<ChatInputHandle, {
   // Recording state
   const [recState, setRecState] = useState<RecState>("idle");
   const [recTime, setRecTime] = useState(0);
+  const [recDuration, setRecDuration] = useState(0);
   const [recIsPlaying, setRecIsPlaying] = useState(false);
   const [recCurrentTime, setRecCurrentTime] = useState(0);
+  const [isComposing, setIsComposing] = useState(false);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const recAudioBlobRef = useRef<Blob | null>(null);
@@ -1242,7 +1244,8 @@ const ChatInput = forwardRef<ChatInputHandle, {
   const handleSend = useCallback(() => {
     const t = input.trim();
     if (!t && pendingImgs.length === 0 && pendingVids.length === 0) return;
-    onSend(t, pendingImgs, pendingVids, []); setInput(""); setPendingImgs([]); setPendingVids([]);
+    onSend(t, pendingImgs, pendingVids, []);
+    setInput(""); setPendingImgs([]); setPendingVids([]);
   }, [input, pendingImgs, pendingVids, onSend]);
 
   const startRecording = async () => {
@@ -1259,11 +1262,13 @@ const ChatInput = forwardRef<ChatInputHandle, {
         const url = URL.createObjectURL(blob);
         const audio = new Audio(url);
         recAudioRef.current = audio;
+        audio.onloadedmetadata = () => {
+          setRecDuration(audio.duration || 0);
+          setRecCurrentTime(0);
+        };
         audio.ontimeupdate = () => setRecCurrentTime(audio.currentTime);
         audio.onended = () => setRecIsPlaying(false);
-        setRecCurrentTime(0);
         setRecState("recorded");
-        audio.play().then(() => setRecIsPlaying(true)).catch(() => {});
       };
       mr.start(100);
       mediaRecorderRef.current = mr;
@@ -1287,19 +1292,24 @@ const ChatInput = forwardRef<ChatInputHandle, {
   const stopRecording = () => {
     if (recTimerRef.current !== null) { clearInterval(recTimerRef.current); recTimerRef.current = null; }
     mediaRecorderRef.current?.stop();
+    mediaRecorderRef.current = null;
   };
 
   const cancelRecording = useCallback(() => {
     const audio = recAudioRef.current;
     if (audio) { audio.pause(); audio.src = ""; recAudioRef.current = null; }
     recAudioBlobRef.current = null;
-    setRecCurrentTime(0); setRecIsPlaying(false); setRecState("idle");
+    setRecCurrentTime(0); setRecDuration(0); setRecIsPlaying(false); setRecState("idle");
   }, []);
 
   const togglePlayback = () => {
     const a = recAudioRef.current; if (!a) return;
-    if (recIsPlaying) { a.pause(); setRecIsPlaying(false); }
-    else { if (a.ended) a.currentTime = 0; a.play().then(() => setRecIsPlaying(true)).catch(() => {}); }
+    if (recIsPlaying) {
+      a.pause(); setRecIsPlaying(false);
+    } else {
+      if (a.ended) a.currentTime = 0;
+      a.play().then(() => setRecIsPlaying(true)).catch(() => { setRecIsPlaying(false); });
+    }
   };
 
   const sendAudio = async () => {
@@ -1308,7 +1318,9 @@ const ChatInput = forwardRef<ChatInputHandle, {
       const dataUrl = await blobToDataUrl(blob);
       onSend("", [], [], [dataUrl]);
       cancelRecording();
-    } catch { /* ignore */ }
+    } catch (err) {
+      onError("오디오 전송에 실패했습니다.");
+    }
   };
 
   useEffect(() => { return () => { if (recTimerRef.current) clearInterval(recTimerRef.current); }; }, []);
@@ -1351,7 +1363,9 @@ const ChatInput = forwardRef<ChatInputHandle, {
               <div aria-hidden className="absolute border border-solid border-white/20 inset-0 pointer-events-none rounded-[30px]" />
               <div className="flex items-start px-[20px] py-[13px] w-full">
                 <input type="text" value={input} onChange={e => setInput(e.target.value)}
-                  onKeyDown={e => { if (e.key === "Enter" && !e.nativeEvent.isComposing) handleSend(); }}
+                  onCompositionStart={() => setIsComposing(true)}
+                  onCompositionEnd={() => setIsComposing(false)}
+                  onKeyDown={e => { if (e.key === "Enter" && !isComposing && !e.nativeEvent.isComposing) handleSend(); }}
                   onFocus={() => setFocused(true)} onBlur={() => setFocused(false)}
                   placeholder="작성.."
                   className={`flex-[1_0_0] w-full bg-transparent outline-none border-none ${SF} font-[510] text-[12px] leading-[normal] placeholder:text-[#b0b0b0] [word-break:break-word]`}
@@ -1547,7 +1561,7 @@ function RecentView({ rooms, onEnterRoom, onContextMenu }: {
               <div key={room.id} className="relative group cursor-pointer" onClick={() => onEnterRoom(room)}>
                 <div className="flex flex-col gap-[8px] items-center p-[14px]">
                   <div className="h-[64px] relative shrink-0 w-[80px] overflow-hidden">
-                    <img alt="" className="absolute h-[100.25%] left-[-10.24%] max-w-none top-[-0.13%] w-[120.48%]" src={imgFolder} />
+                    <img alt="" className="absolute inset-0 w-full h-full object-contain" src={imgFolder} />
                   </div>
                   <p className={`${SF} font-[510] text-[12px] ${nameColor} whitespace-nowrap max-w-[80px] overflow-hidden text-ellipsis text-center ${NS}`}>{room.name}</p>
                 </div>
@@ -1870,7 +1884,7 @@ export default function App() {
   };
 
   const handleDevPasswordSubmit = (pw: string, onWrong: () => void) => {
-    if (pw === DEV_PW) { setDevStep("view"); } else { onWrong(); }
+    if (pw.trim() === DEV_PW) { setDevStep("view"); } else { onWrong(); }
   };
   const handleDevDeleteConfirm = () => {
     if (!devDeleteUser) return;
