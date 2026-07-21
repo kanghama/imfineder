@@ -25,12 +25,21 @@ const firebaseConfig = {
   appId: import.meta.env.VITE_FIREBASE_APP_ID,
 };
 
+export function isFirebaseConfigured() {
+  return Boolean(firebaseConfig.apiKey && firebaseConfig.projectId && firebaseConfig.appId);
+}
+
 let app: ReturnType<typeof initializeApp> | null = null;
 let auth: ReturnType<typeof getAuth> | null = null;
 let db: ReturnType<typeof getFirestore> | null = null;
 let storage: ReturnType<typeof getStorage> | null = null;
 
 export function initFirebase() {
+  if (!isFirebaseConfigured()) {
+    // Skip initialization when config is missing (e.g., env not provided at build time)
+    return { app: null, auth: null, db: null, storage: null };
+  }
+
   if (!getApps().length) {
     app = initializeApp(firebaseConfig as any);
   }
@@ -43,13 +52,21 @@ export function initFirebase() {
 
 export async function signInAnonymously() {
   initFirebase();
-  if (!auth) throw new Error("Firebase Auth not initialized");
+  if (!isFirebaseConfigured() || !auth) {
+    return Promise.reject(new Error("Firebase not configured"));
+  }
   return fbSignInAnonymously(auth);
 }
 
 export function onAuthStateChanged(cb: (user: any) => void) {
   initFirebase();
-  if (!auth) throw new Error("Firebase Auth not initialized");
+  if (!isFirebaseConfigured() || !auth) {
+    // Call back with null once so callers can handle missing user, and return a no-op unsubscribe
+    setTimeout(() => cb(null), 0);
+    return () => {
+      /* no-op */
+    };
+  }
   return fbOnAuthStateChanged(auth, cb);
 }
 
